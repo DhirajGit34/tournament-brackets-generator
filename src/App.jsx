@@ -1,5 +1,5 @@
 import React from "react";
-import TournamentBracketApp from "./TournamentBracketApp";
+import TournamentBracketApp from "./components/TournamentBracketApp";
 
 const App = () => {
   return <TournamentBracketApp />;

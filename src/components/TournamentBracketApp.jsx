@@ -1,115 +1,5 @@
 import React, { useState, useCallback } from "react";
-
-// --- SINGLE ELIMINATION BRACKET GENERATION ---
-const generateSingleEliminationBracket = (participantsArray) => {
-  let players = [...participantsArray];
-
-  if (players.length < 1)
-    return {
-      rounds: [],
-      champion: null,
-      error: "Please add at least 1 participant.",
-    };
-  if (players.length === 1) {
-    return {
-      rounds: [
-        [
-          {
-            id: "sR0M0",
-            pair: [players[0], "WINNER!"],
-            winner: players[0],
-            type: "SE",
-          },
-        ],
-      ],
-      champion: players[0],
-      error: null,
-    };
-  }
-
-  players.sort(() => 0.5 - Math.random()); // Shuffle for fairness
-
-  const allRounds = [];
-  let currentEntrants = [...players];
-  let roundNum = 0;
-
-  while (currentEntrants.length > 1) {
-    const currentRoundMatches = [];
-    const nextRoundEntrants = [];
-    let activeEntrantsThisRound = [...currentEntrants];
-
-    if (activeEntrantsThisRound.length % 2 !== 0) {
-      let byeRecipient = null;
-      let byeRecipientIndex = -1;
-      const shuffledActiveEntrants = [...activeEntrantsThisRound].sort(
-        () => 0.5 - Math.random()
-      );
-      for (let i = 0; i < shuffledActiveEntrants.length; i++) {
-        if (shuffledActiveEntrants[i] !== null) {
-          // Prefer actual player for bye
-          byeRecipient = shuffledActiveEntrants[i];
-          byeRecipientIndex = activeEntrantsThisRound.indexOf(byeRecipient);
-          break;
-        }
-      }
-      // If no actual player, but still odd (e.g. all TBDs), one TBD gets a bye
-      if (byeRecipient === null && activeEntrantsThisRound.length > 0) {
-        byeRecipient = activeEntrantsThisRound[0]; // First TBD slot gets it
-        byeRecipientIndex = 0;
-      }
-
-      if (byeRecipientIndex !== -1) {
-        // Found someone/something to give a bye to
-        const actualByeRecipient = activeEntrantsThisRound.splice(
-          byeRecipientIndex,
-          1
-        )[0];
-        currentRoundMatches.push({
-          id: `sR${roundNum}M${currentRoundMatches.length}`,
-          pair: [actualByeRecipient, "BYE"],
-          winner: actualByeRecipient === null ? null : actualByeRecipient, // TBD advances as TBD, player as player
-          type: "SE",
-        });
-        nextRoundEntrants.push(
-          actualByeRecipient === null ? null : actualByeRecipient
-        );
-      }
-    }
-
-    for (let i = 0; i < activeEntrantsThisRound.length; i += 2) {
-      const p1 = activeEntrantsThisRound[i];
-      const p2 = activeEntrantsThisRound[i + 1];
-      currentRoundMatches.push({
-        id: `sR${roundNum}M${currentRoundMatches.length}`,
-        pair: [p1, p2],
-        winner: null,
-        type: "SE",
-      });
-      nextRoundEntrants.push(null); // Winner is TBD
-    }
-
-    if (currentRoundMatches.length > 0) allRounds.push(currentRoundMatches);
-    currentEntrants = nextRoundEntrants.filter((e) => e !== undefined);
-    roundNum++;
-    if (roundNum > participantsArray.length + 3) break; // Safety break
-  }
-
-  let finalChampion = null;
-  if (allRounds.length > 0) {
-    const lastRound = allRounds[allRounds.length - 1];
-    if (
-      lastRound.length === 1 &&
-      lastRound[0].winner &&
-      lastRound[0].winner !== null
-    ) {
-      finalChampion = lastRound[0].winner;
-    }
-  } else if (players.length === 1) {
-    finalChampion = players[0];
-  }
-
-  return { rounds: allRounds, champion: finalChampion, error: null };
-};
+import SingleElimination from "./singleElemination";
 
 // --- DOUBLE ELIMINATION BRACKET GENERATION ---
 const generateDoubleEliminationBracket = (participantsArray) => {
@@ -554,7 +444,7 @@ function TournamentBracketApp() {
     setError("");
     let result;
     if (tournamentType === "single") {
-      result = generateSingleEliminationBracket(participants);
+      result = SingleElimination(participants);
       if (result.error) {
         setError(result.error);
         setBracketData({ type: "single", rounds: [], champion: null });
