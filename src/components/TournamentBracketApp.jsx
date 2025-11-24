@@ -1,27 +1,91 @@
-import React, { useState, useCallback } from "react";
-import SingleElimination from "./singleElemination";
-import DoubleElimination from "./DoubleElemination,jsx";
+import React, {
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+} from "react";
+import SingleElimination from "./SingleElimination";
+import DoubleElimination from "./DoubleElimination";
+
+const DEFAULT_BRACKET_STATE = {
+  type: "single",
+  rounds: [],
+  upperBracketRounds: [],
+  lowerBracketRounds: [],
+  grandFinalMatch: null,
+  champion: null,
+};
+
+const createEmptyBracketState = (type = "single") => ({
+  ...DEFAULT_BRACKET_STATE,
+  type,
+});
 
 // Main App Component
 function TournamentBracketApp() {
   const [participants, setParticipants] = useState([]);
   const [inputValue, setInputValue] = useState("");
-  const [tournamentType, setTournamentType] = useState("single"); // 'single' or 'double'
-  const [bracketData, setBracketData] = useState({
-    type: "single",
-    rounds: [],
-    upperBracketRounds: [],
-    lowerBracketRounds: [],
-    grandFinalMatch: null,
-    champion: null,
-  });
+  const [tournamentType, setTournamentType] = useState("single");
+  const [bracketData, setBracketData] = useState(() =>
+    createEmptyBracketState()
+  );
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const successTimeoutRef = useRef(null);
 
-  const showSuccess = (message) => {
+  const resetBracketData = useCallback(
+    (typeOverride) => {
+      setBracketData(createEmptyBracketState(typeOverride ?? tournamentType));
+    },
+    [tournamentType]
+  );
+
+  const showSuccess = useCallback((message) => {
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current);
+    }
     setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(""), 3000);
-  };
+    successTimeoutRef.current = setTimeout(() => setSuccessMessage(""), 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const participantCount = participants.length;
+  const hasParticipants = participantCount > 0;
+  const hasExactlyOneParticipant = participantCount === 1;
+  const hasMultipleParticipants = participantCount > 1;
+
+  const hasSingleBracketData = useMemo(() => {
+    if (bracketData.type !== "single") return false;
+    const hasRounds =
+      Array.isArray(bracketData.rounds) && bracketData.rounds.length > 0;
+    return hasRounds || Boolean(bracketData.champion);
+  }, [bracketData]);
+
+  const hasDoubleBracketData = useMemo(() => {
+    if (bracketData.type !== "double") return false;
+    const hasUpper =
+      Array.isArray(bracketData.upperBracketRounds) &&
+      bracketData.upperBracketRounds.length > 0;
+    const hasLower =
+      Array.isArray(bracketData.lowerBracketRounds) &&
+      bracketData.lowerBracketRounds.length > 0;
+    const hasGrandFinal =
+      Array.isArray(bracketData.grandFinalMatch) &&
+      bracketData.grandFinalMatch.length > 0;
+    return (
+      hasUpper || hasLower || hasGrandFinal || Boolean(bracketData.champion)
+    );
+  }, [bracketData]);
+
+  const shouldRenderBracket = hasSingleBracketData || hasDoubleBracketData;
 
   const addParticipantsFromInput = () => {
     if (inputValue.trim() === "") {
@@ -36,16 +100,25 @@ function TournamentBracketApp() {
       setError("No valid participant names entered.");
       return;
     }
-    let addedCount = 0,
-      duplicateCount = 0;
-    let newParticipants = [...participants];
-    namesArray.forEach((name) => {
-      if (!newParticipants.includes(name)) {
-        newParticipants.push(name);
-        addedCount++;
-      } else duplicateCount++;
+    let addedCount = 0;
+    let duplicateCount = 0;
+
+    setParticipants((currentParticipants) => {
+      const existingNames = new Set(currentParticipants);
+      const updatedParticipants = [...currentParticipants];
+
+      namesArray.forEach((name) => {
+        if (!existingNames.has(name)) {
+          updatedParticipants.push(name);
+          existingNames.add(name);
+          addedCount++;
+        } else {
+          duplicateCount++;
+        }
+      });
+
+      return updatedParticipants;
     });
-    setParticipants(newParticipants);
     setInputValue("");
     setError("");
     showSuccess(
@@ -57,93 +130,73 @@ function TournamentBracketApp() {
 
   const handleInputChange = (e) => setInputValue(e.target.value);
   const handleTournamentTypeChange = (e) => {
-    setTournamentType(e.target.value);
-    // Clear existing bracket data when type changes, as structure is different
-    setBracketData({
-      type: e.target.value,
-      rounds: [],
-      upperBracketRounds: [],
-      lowerBracketRounds: [],
-      grandFinalMatch: null,
-      champion: null,
-    });
+    const nextType = e.target.value;
+    setTournamentType(nextType);
+    resetBracketData(nextType);
   };
   const removeParticipant = (nameToRemove) => {
-    setParticipants(participants.filter((name) => name !== nameToRemove));
+    setParticipants((currentParticipants) =>
+      currentParticipants.filter((name) => name !== nameToRemove)
+    );
     showSuccess(`${nameToRemove} removed.`);
   };
   const clearParticipants = () => {
+    const hadParticipants = hasParticipants;
     setParticipants([]);
-    setBracketData({
-      type: tournamentType,
-      rounds: [],
-      upperBracketRounds: [],
-      lowerBracketRounds: [],
-      grandFinalMatch: null,
-      champion: null,
-    });
+    resetBracketData();
     setError("");
-    if (participants.length > 0) showSuccess("All participants cleared.");
+    if (hadParticipants) showSuccess("All participants cleared.");
   };
 
   const generateNewBracket = useCallback(() => {
-    if (participants.length === 0) {
+    if (!hasParticipants) {
       setError("Please add at least 1 participant.");
-      // Preserve current type, clear data
-      setBracketData((prev) => ({
-        ...prev,
-        rounds: [],
-        upperBracketRounds: [],
-        lowerBracketRounds: [],
-        grandFinalMatch: null,
-        champion: null,
-      }));
+      resetBracketData();
       return;
     }
+
     setError("");
     let result;
+
     if (tournamentType === "single") {
       result = SingleElimination(participants);
       if (result.error) {
         setError(result.error);
-        setBracketData({ type: "single", rounds: [], champion: null });
-      } else {
-        setBracketData({
-          type: "single",
-          rounds: result.rounds || [],
-          champion: result.champion || null,
-          upperBracketRounds: [],
-          lowerBracketRounds: [],
-          grandFinalMatch: null,
-        });
-        showSuccess("Single elimination tournament generated!");
+        resetBracketData("single");
+        return;
       }
-    } else {
-      // Double elimination
-      result = DoubleElimination(participants);
-      if (result.error) {
-        setError(result.error);
-        setBracketData({
-          type: "double",
-          upperBracketRounds: [],
-          lowerBracketRounds: [],
-          grandFinalMatch: null,
-          champion: null,
-          rounds: [],
-        });
-      } else {
-        setBracketData({
-          type: "double",
-          upperBracketRounds: result.upperBracketRounds || [],
-          lowerBracketRounds: result.lowerBracketRounds || [],
-          grandFinalMatch: result.grandFinalMatch || null,
-          champion: result.champion || null, // Champion usually TBD for DE until GF
-          rounds: [], // Clear single elim rounds
-        });
-        showSuccess("Double elimination tournament generated!");
-      }
+
+      setBracketData({
+        ...createEmptyBracketState("single"),
+        rounds: result.rounds || [],
+        champion: result.champion || null,
+      });
+      showSuccess("Single elimination tournament generated!");
+      return;
     }
-  }, [participants, tournamentType]);
+
+    result = DoubleElimination(participants);
+    if (result.error) {
+      setError(result.error);
+      resetBracketData("double");
+      return;
+    }
+
+    setBracketData({
+      ...createEmptyBracketState("double"),
+      upperBracketRounds: result.upperBracketRounds || [],
+      lowerBracketRounds: result.lowerBracketRounds || [],
+      grandFinalMatch: result.grandFinalMatch || null,
+      champion: result.champion || null,
+    });
+    showSuccess("Double elimination tournament generated!");
+  }, [
+    hasParticipants,
+    participants,
+    resetBracketData,
+    showSuccess,
+    tournamentType,
+  ]);
 
   const getPlayerDisplay = (player, isWinner = false) => {
     if (player === null || player === undefined)
@@ -200,7 +253,7 @@ function TournamentBracketApp() {
     if (type === "single") {
       scheduleText =
         "Single Elimination Tournament Schedule\n====================================\n\n";
-      if (champion && participants.length === 1) {
+      if (champion && hasExactlyOneParticipant) {
         scheduleText += `CHAMPION (Auto-Win): ${champion}\n\n`;
       }
       (rounds || []).forEach((round, roundIndex) => {
@@ -231,14 +284,14 @@ function TournamentBracketApp() {
           scheduleText += "\n";
         });
       });
-      if (champion && participants.length > 1) {
+      if (champion && hasMultipleParticipants) {
         scheduleText += `====================================\nCHAMPION: ${champion}\n====================================\n`;
       }
     } else {
       // Double Elimination
       scheduleText =
         "Double Elimination Tournament Schedule\n====================================\n\n";
-      if (champion && participants.length === 1) {
+      if (champion && hasExactlyOneParticipant) {
         scheduleText += `CHAMPION (Auto-Win): ${champion}\n\n`;
       }
       if (upperBracketRounds && upperBracketRounds.length > 0) {
@@ -320,7 +373,7 @@ function TournamentBracketApp() {
           gf.pair[0]
         } vs ${gf.pair[1]}\n  Winner: TBD\n\n`;
       }
-      if (champion && participants.length > 1) {
+      if (champion && hasMultipleParticipants) {
         // Overall DE champion (usually TBD unless auto-advanced)
         scheduleText += `====================================\nOVERALL CHAMPION: ${champion}\n====================================\n`;
       }
@@ -345,7 +398,7 @@ function TournamentBracketApp() {
       let roundTitle = `Round ${roundIndex + 1}`;
       if (
         isFinalRound &&
-        participants.length > 1 &&
+        hasMultipleParticipants &&
         !(round.length === 1 && round[0].pair[1] === "WINNER!")
       ) {
         roundTitle += " - Final";
@@ -353,7 +406,7 @@ function TournamentBracketApp() {
       // Don't render round if it's the single participant winner round (handled by champion display)
       if (
         bracketData.champion &&
-        participants.length === 1 &&
+        hasExactlyOneParticipant &&
         round[0]?.pair[1] === "WINNER!"
       )
         return null;
@@ -578,10 +631,10 @@ function TournamentBracketApp() {
           </p>
         )}
 
-        {participants.length > 0 && (
+        {hasParticipants && (
           <div className="mb-6">
             <h2 className="text-lg sm:text-xl font-semibold text-teal-300 mb-2">
-              Participants ({participants.length}):
+              Participants ({participantCount}):
             </h2>
             <ul className="space-y-2 max-h-40 sm:max-h-48 overflow-y-auto bg-gray-700 p-3 rounded-lg custom-scrollbar">
               {participants.map((name, index) => (
@@ -606,9 +659,7 @@ function TournamentBracketApp() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
             onClick={generateNewBracket}
-            disabled={
-              participants.length === 0 && bracketData.champion === null
-            }
+            disabled={!hasParticipants && bracketData.champion === null}
             className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg shadow-md"
           >
             Generate Tournament
@@ -623,16 +674,7 @@ function TournamentBracketApp() {
       </div>
 
       {/* Tournament Schedule Display Area */}
-      {((bracketData.type === "single" &&
-        ((bracketData.rounds && bracketData.rounds.length > 0) ||
-          bracketData.champion)) ||
-        (bracketData.type === "double" &&
-          ((bracketData.upperBracketRounds &&
-            bracketData.upperBracketRounds.length > 0) ||
-            (bracketData.lowerBracketRounds &&
-              bracketData.lowerBracketRounds.length > 0) ||
-            bracketData.grandFinalMatch ||
-            bracketData.champion))) && (
+      {shouldRenderBracket && (
         <div className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl p-4 sm:p-6 bg-gray-800 rounded-xl shadow-2xl mt-8">
           {" "}
           {/* Added mt-8 for spacing */}
@@ -649,7 +691,7 @@ function TournamentBracketApp() {
               Export Schedule
             </button>
           </div>
-          {bracketData.champion && participants.length === 1 && (
+          {bracketData.champion && participantCount === 1 && (
             <div className="mb-6 sm:mb-8 p-4 bg-yellow-500 text-gray-900 rounded-lg shadow-lg text-center">
               <h3 className="text-xl sm:text-2xl font-bold">🏆 CHAMPION 🏆</h3>
               <p className="text-lg sm:text-xl">
@@ -658,9 +700,9 @@ function TournamentBracketApp() {
             </div>
           )}
           {bracketData.type === "single" &&
-            participants.length > 1 &&
+            hasMultipleParticipants &&
             renderSingleElimination()}
-          {bracketData.type === "double" && participants.length > 1 && (
+          {bracketData.type === "double" && hasMultipleParticipants && (
             <>
               {bracketData.upperBracketRounds &&
                 bracketData.upperBracketRounds.length > 0 && (
@@ -701,7 +743,7 @@ function TournamentBracketApp() {
             </>
           )}
           {bracketData.champion &&
-            participants.length > 1 &&
+            hasMultipleParticipants &&
             bracketData.type === "single" && (
               <div className="mt-8 p-4 bg-yellow-500 text-gray-900 rounded-lg shadow-lg text-center">
                 <h3 className="text-xl sm:text-2xl font-bold">
@@ -713,7 +755,7 @@ function TournamentBracketApp() {
               </div>
             )}
           {bracketData.champion &&
-            participants.length > 1 &&
+            hasMultipleParticipants &&
             bracketData.type === "double" && (
               <div className="mt-8 p-4 bg-yellow-500 text-gray-900 rounded-lg shadow-lg text-center">
                 <h3 className="text-xl sm:text-2xl font-bold">
@@ -725,15 +767,15 @@ function TournamentBracketApp() {
               </div>
             )}
           {((bracketData.type === "single" &&
-            bracketData.rounds &&
+            Array.isArray(bracketData.rounds) &&
             bracketData.rounds.length > 0) ||
             (bracketData.type === "double" &&
-              ((bracketData.upperBracketRounds &&
+              ((Array.isArray(bracketData.upperBracketRounds) &&
                 bracketData.upperBracketRounds.length > 0) ||
-                (bracketData.lowerBracketRounds &&
+                (Array.isArray(bracketData.lowerBracketRounds) &&
                   bracketData.lowerBracketRounds.length > 0)))) &&
             !bracketData.champion &&
-            participants.length > 1 && (
+            hasMultipleParticipants && (
               <p className="mt-6 text-sm text-gray-400 text-center">
                 Note: Winners are automatically advanced for BYE matches.
                 Interactive winner selection is not yet implemented.
