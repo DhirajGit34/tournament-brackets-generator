@@ -573,18 +573,18 @@ function TournamentBracketApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white font-inter p-4 sm:p-6 md:p-8 flex flex-col items-center">
-      <div className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl mb-8 p-4 sm:p-6 bg-gray-800 rounded-xl shadow-2xl">
-        <h1 className="text-2xl sm:text-3xl font-bold text-center text-teal-400 mb-6">
-          Tournament Manager
+    <div className="min-h-screen  text-white font-inter p-4 sm:p-6 md:p-8 flex flex-col items-center">
+      <div className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl mb-8 p-4 sm:p-6 bg-neutral-bg rounded-xl shadow-2xl">
+        <h1 className="text-2xl font-medium text-neutral-text-main text-center mb-6 text-black">
+          Tournament Brackets Generator
         </h1>
 
         <div className="mb-4">
           <label
             htmlFor="tournamentTypeSelect"
-            className="block text-sm font-medium text-teal-300 mb-1"
+            className="block text-sm text-neutral-text-main mb-2 text-black"
           >
-            Tournament Type:
+            Tournament Type :
           </label>
           <select
             id="tournamentTypeSelect"
@@ -600,7 +600,7 @@ function TournamentBracketApp() {
         <div className="mb-4">
           <label
             htmlFor="participantInput"
-            className="block text-sm font-medium text-teal-300 mb-1"
+            className="block text-sm font-medium text-black mb-1"
           >
             Enter participant names (one per line or comma-separated):
           </label>
